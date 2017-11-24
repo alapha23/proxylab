@@ -11,7 +11,7 @@
 
 ### Extra
 
-* `./pages`: folder storing some example web pages
+* `./pages`: Folder storing some example web pages
 * `index.html`: Simple html page
 * `image.jpg`: JPEG image
-* `image.html`: html page containing the image
+* `image.html`: Simple html page containing an image
