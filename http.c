@@ -55,10 +55,10 @@ int main(int argc, char **argv)
  *  with the doit function then closes the connection 
  */  
   
-  /*  
+    
   int listenfd, connfd, port, clientlen;
   struct sockaddr_in clientaddr;
-  */
+  
   if (argc != 2) {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
     exit(1);
