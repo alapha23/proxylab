@@ -63,11 +63,20 @@ int main(int argc, char **argv)
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
     exit(1);
   }
+  
+  port = atoi(argv[1]);
 
+  listenfd = Open_listenfd(port);
   // listen for connections on the given port
+  while(1)
+  {
   // if a client connects, accept the connection, handle the request
+    clientlen = sizeof(clientaddr);
+    connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
   // (call the doit function), then close the connection
-
+    doit(connfd);
+    Close(connfd);
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -81,17 +90,25 @@ void doit(int fd)
  *    - fd (int): file descriptor of connection socket.
  *
  */  
-  /*
+  int is_static;
   struct stat sbuf;
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-  char filename[MAXLINE]; 
-  */
+  char filename[MAXLINE], cigargs[MAXLINE]; 
+  
   // read and store the first line of the HTTP request in the corresponding
   // variables (format: method uri and version)
   rio_t rio;
 
   Rio_readinitb(&rio, fd);
+  Rio_readlineb(&rio, buf, MAXLINE);
+  sscanf(buf, "%s %s %s", method, uri, version);
 
+  if(strcasecmp(method, "GET"))
+  {
+    clienterror(fd, method, "501", "Not Implemented", "Tiny does not implement hthis method");
+    return ;
+  }
+  read_requesthdrs(&rio);
   // be sure to call this only after you have read out all the information
   // you need from the request
   print_requesthdrs(&rio);
