@@ -1,2 +1,4 @@
 http
-csapp.o
+proxy
+*.o
+*.swp

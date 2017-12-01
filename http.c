@@ -40,7 +40,7 @@
 
 void doit(int fd);
 void print_requesthdrs(rio_t *rp);
-int parse_uri(char *uri, char *filename, char *cgiargs);
+void parse_uri(char *uri, char *filename);
 void serve_static(int fd, char *filename, int filesize);
 void serve_dynamic(int fd, char *filename, char *cgiargs);
 void get_filetype(char *filename, char *filetype);
@@ -91,7 +91,7 @@ void doit(int fd)
  *    - fd (int): file descriptor of connection socket.
  *
  */  
-  int is_static;
+  int is_static = 1;
   struct stat sbuf;
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
   char filename[MAXLINE], cgiargs[MAXLINE]; 
@@ -102,7 +102,9 @@ void doit(int fd)
 
   Rio_readinitb(&rio, fd);
   Rio_readlineb(&rio, buf, MAXLINE);
+//  printf("Input buffer=%s\n", buf);
   sscanf(buf, "%s %s %s", method, uri, version);
+//  printf("method:%s, uri:%s, version:%s\n", method, uri, version);
 
  // Check if the method is GET, if not return a 501 error using clienterror()
   if(strcasecmp(method, "GET"))
@@ -112,13 +114,15 @@ void doit(int fd)
   }
 //  read_requesthdrs(&rio);
   Rio_readlineb(&rio, buf, MAXLINE);
+
   while(strcmp(buf, "\r\n"))
 	  Rio_readlineb(&rio, buf, MAXLINE);
 
  // If the method is GET, first: call the parse_uri function
   /* parse URI from GET request */
-  is_static = parse_uri(uri, filename, cgiargs);
+  parse_uri(uri, filename);
   // Check if the requested path exists, if not return 404 Error
+
   if(stat(filename, &sbuf)<0)
   {
     clienterror(fd, filename, "404", "Not found", "Tiny couldn't find this file");
@@ -245,7 +249,7 @@ void print_requesthdrs(rio_t *rp)
 }
 
 //-----------------------------------------------------------------------------
-int parse_uri(char *uri, char *filename, char *cgiargs)
+void parse_uri(char *uri, char *filename)
 {
 /**** DO NOT MODIFY ****/
 /*
@@ -257,33 +261,17 @@ int parse_uri(char *uri, char *filename, char *cgiargs)
  *
  */
 
+//printf("In parse uri\n");
 strcpy(filename, ".");
+//printf("filename=%s\n", filename);
+
 strcat(filename, uri);
+//printf("filename=%s\n", filename);
+
 sscanf(uri, "http://%*[^/]%s", filename);
-return 1;
-  char *ptr;
-  if(!strstr(uri, "cgi-bin"))
-  {
-    strcpy(cgiargs, "");
-    strcpy(filename, ".");
-    strcat(filename, uri);
-    if(uri[strlen(uri)-1] == '/')
-      strcat(filename, "home.html");
-    return 1;
-  }
-  else{
-    ptr = index(uri, '?');
-    if(ptr)
-    {
-      strcpy(cgiargs, ptr+1);
-      *ptr = '\0';
-    }
-    else
-      strcpy(cgiargs, "");
-    strcpy(filename, ".");
-    strcpy(filename, uri);
-    return 0;
-  }
+//printf("filename=%s\n", filename);
+
+return ;
 }
 
 //-----------------------------------------------------------------------------

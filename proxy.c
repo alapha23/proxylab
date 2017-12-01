@@ -47,18 +47,27 @@ int main(int argc, char **argv)
  *  listens for connections on the given port number, handles HTTP requests
  *  with the doit function then closes the connection
  */
-  /*
+  
   int listenfd, connfd, port, clientlen;
   struct sockaddr_in clientaddr;
-  */
+  
   if (argc != 2) {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
     exit(1);
   }
 
+  port = atoi(argv[1]);
   // listen for connections
+  listenfd = Open_listenfd(port); 
   // if a client connects, accept the connection, handle the requests
+  while(1)
+  {
   // (call the do it function), then close the connection
+    clientlen = sizeof(clientaddr);
+    connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+    doit(connfd);
+    Close(connfd);
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -71,48 +80,69 @@ void doit(int fd)
  * params:
  *    - fd (int): file descriptor of the connection socket.
  */
-  /*
+  
   char line1[MAXLINE], line2[MAXLINE], host[MAXLINE];
   int serverfd, port;
-  */
+  // send to the http server
+  char host_httpserv[MAXLINE];
+  int port_httpserv;
   rio_t rio;
 
   Rio_readinitb(&rio, fd);
 
   //read line 1, format: method uri version
-
-  //read and parse line 2, format:  host:port
-
-
-  // be sure to call this only after you have read out all the information
-  // you need from the request
-  print_requesthdrs(&rio);
+  Rio_readlineb(&rio, line1, MAXLINE);
+  // it should be: GET http://localhost:8080/pages/inde.html HTTP/1.1
+  Rio_readlineb(&rio, line2, MAXLINE);
+  sscanf(line2, "%*s %[^:]:%d", host_httpserv, &port_httpserv);
 
   // Send the first line of the client request to the server
   // (only the first line is needed), add a break '\r\n' so the server knows
   // the request has ended
-
-  /*
+  
   char responseBuffer[MAXLINE], response[MAXLINE];
-  char *contentBuffer;
+  char contentBuffer[MAXLINE];
   int contentLength;
   rio_t serverResponse;
 
+  char method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+  sscanf(line1, "%s %s %s", method, uri, version);
+  sscanf(uri, "http://%*[^/]%s", contentBuffer);
+  sprintf(response, "%s %s %s", method, contentBuffer, version);
+  strcat(response, "\r\n");
+  strcat(response, "\r\n");
   responseBuffer[0] = '\0';
-  response[0] = '\0';
-  */
+
+  // send the content to the http server
+  serverfd = Open_clientfd(host_httpserv, port_httpserv);
+  Rio_readinitb(&serverResponse, serverfd);
+  Rio_writen(serverfd, response, MAXLINE);
 
   // Read the response header from the server and build the proxy's response
   // header by repeatedly adding the responseBuffer (server response)
+  while(strcmp(contentBuffer, "\r\n"))
+  {
+    Rio_readlineb(&serverResponse, contentBuffer, MAXLINE);
+    strcat(responseBuffer, contentBuffer);
+  }
 
+  char temp[32];
   // we must parse the Content-Length header from the server response in order
   // to know how much content to read from the server and write to the client
-
+  sscanf(responseBuffer, "%*[^-]%*s %s\r\n", temp);
+  contentLength = atoi(temp);  
   // Using the contentLength read from the server response header,
   // we must allocate and read that many bytes to our buffer
+  while(contentLength > 1)
+  {
+    Rio_readlineb(&serverResponse, contentBuffer, contentLength);
+    strcat(responseBuffer, contentBuffer);
+    contentLength -= strlen(contentBuffer);
+  }
 
   // We now write the response heading and the content back to the client
-
+  Rio_writen(fd, responseBuffer, strlen(responseBuffer));
+  Close(serverfd);
   // Close the connection to the server
 }
 
