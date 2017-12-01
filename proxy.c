@@ -101,7 +101,7 @@ void doit(int fd)
   // the request has ended
   
   char responseBuffer[MAXLINE], response[MAXLINE];
-  char contentBuffer[MAXLINE];
+  char contentBuffer[2<<20];
   int contentLength;
   rio_t serverResponse;
 
@@ -131,17 +131,16 @@ void doit(int fd)
   // to know how much content to read from the server and write to the client
   sscanf(responseBuffer, "%*[^-]%*s %s\r\n", temp);
   contentLength = atoi(temp);  
+//  printf("%s", responseBuffer);
   // Using the contentLength read from the server response header,
   // we must allocate and read that many bytes to our buffer
-  while(contentLength > 1)
-  {
-    Rio_readlineb(&serverResponse, contentBuffer, contentLength);
-    strcat(responseBuffer, contentBuffer);
-    contentLength -= strlen(contentBuffer);
-  }
+
+  Rio_readnb(&serverResponse, contentBuffer, contentLength+1);
+  strcat(responseBuffer, contentBuffer);
 
   // We now write the response heading and the content back to the client
   Rio_writen(fd, responseBuffer, strlen(responseBuffer));
+//  printf("%s", responseBuffer);
   Close(serverfd);
   // Close the connection to the server
 }
