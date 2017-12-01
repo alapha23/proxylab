@@ -256,6 +256,11 @@ int parse_uri(char *uri, char *filename, char *cgiargs)
  *    - filename: local filepath (output)
  *
  */
+
+strcpy(filename, ".");
+strcat(filename, uri);
+sscanf(uri, "http://%*[^/]%s", filename);
+return 1;
   char *ptr;
   if(!strstr(uri, "cgi-bin"))
   {
