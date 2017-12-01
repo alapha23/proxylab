@@ -40,8 +40,9 @@
 
 void doit(int fd);
 void print_requesthdrs(rio_t *rp);
-void parse_uri(char *uri, char *filename);
+int parse_uri(char *uri, char *filename, char *cgiargs);
 void serve_static(int fd, char *filename, int filesize);
+void serve_dynamic(int fd, char *filename, char *cgiargs);
 void get_filetype(char *filename, char *filetype);
 void clienterror(int fd, char *cause, char *errnum,
                  char *shortmsg, char *longmsg);
@@ -93,7 +94,7 @@ void doit(int fd)
   int is_static;
   struct stat sbuf;
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-  char filename[MAXLINE], cigargs[MAXLINE]; 
+  char filename[MAXLINE], cgiargs[MAXLINE]; 
   
   // read and store the first line of the HTTP request in the corresponding
   // variables (format: method uri and version)
@@ -103,22 +104,51 @@ void doit(int fd)
   Rio_readlineb(&rio, buf, MAXLINE);
   sscanf(buf, "%s %s %s", method, uri, version);
 
+ // Check if the method is GET, if not return a 501 error using clienterror()
   if(strcasecmp(method, "GET"))
   {
     clienterror(fd, method, "501", "Not Implemented", "Tiny does not implement hthis method");
     return ;
   }
-  read_requesthdrs(&rio);
+//  read_requesthdrs(&rio);
+  Rio_readlineb(&rio, buf, MAXLINE);
+  while(strcmp(buf, "\r\n"))
+	  Rio_readlineb(&rio, buf, MAXLINE);
+
+ // If the method is GET, first: call the parse_uri function
+  /* parse URI from GET request */
+  is_static = parse_uri(uri, filename, cgiargs);
+  // Check if the requested path exists, if not return 404 Error
+  if(stat(filename, &sbuf)<0)
+  {
+    clienterror(fd, filename, "404", "Not found", "Tiny couldn't find this file");
+    return ;
+  }
+  //  - this returns a path from a given uri
+  // Check if the requested path is a directory if so return 403 error
+  if(is_static) 
+  {
+    if(!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode))
+    {
+      clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't read the file");
+      return ;
+    }
+    serve_static(fd, filename, sbuf.st_size);
+  }
+  else{
+    if(!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode))
+    {
+      clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't run the CGI program");
+      return ;
+    }
+    serve_dynamic(fd, filename, cgiargs);
+  }
+
   // be sure to call this only after you have read out all the information
   // you need from the request
-  print_requesthdrs(&rio);
+  // print_requesthdrs(&rio);
 
-  // Check if the method is GET, if not return a 501 error using clienterror()
-  
-  // If the method is GET, first: call the parse_uri function
-  //  - this returns a path from a given uri
-  // Check if the requested path exists, if not return 404 Error
-  // Check if the requested path is a directory if so return 403 error
+   
 
   // If the file exists serve it to the client
   // (implement the serve_static function)
@@ -138,25 +168,34 @@ void serve_static(int fd, char *filename, int filesize)
  *    - filesize: size of requested file
  * return: void
  */    
-  /*
+  
   int srcfd;
   char *srcp, filetype[MAXLINE], responseBuffer[MAXBUF];
-  */
+  
 
   // First check the file type using get_filetype, also add images
   // (jpg, gif, png) to the list of servable files
-
+  get_filetype(filename, filetype);
   /* Send the HTTP response header to the client */
   // Build valid response header and send to client
-  // (check the clienterror function for reference)
+  sprintf(responseBuffer, "HTTP/1.0 200 OK\r\n");
   // Should consist of a Response line, the server name, the Content-Type
   // and the Content-Length
+  sprintf(responseBuffer, "%sServer: Tiny Web Server\r\n", responseBuffer);
+  sprintf(responseBuffer, "%sContent-length: %d\r\n", responseBuffer, filesize);
+  sprintf(responseBuffer, "%sContent-type: %s\r\n\r\n", responseBuffer, filetype);
+  Rio_writen(fd, responseBuffer, strlen(responseBuffer));
 
+  // (check the clienterror function for reference)
   /* Send the file content to the client */
   // Open the file
+  srcfd = Open(filename, O_RDONLY, 0);
+  srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
+  Close(srcfd);
   // Copy it to the srcp buffer
   // Write this to the client
-
+  Rio_writen(fd, srcp, filesize);
+  Munmap(srcp, filesize);
 }
 
 //-----------------------------------------------------------------------------
@@ -173,6 +212,12 @@ void get_filetype(char *filename, char *filetype)
   if (strstr(filename, ".html"))
     strcpy(filetype, "text/html");
   // Please implement the image filetypes: jpg, png, gif
+  else if(strstr(filename, ".gif"))
+	  strcpy(filetype, "image/gif");
+  else if(strstr(filename, ".png"))
+	  strcpy(filetype, "image/png");
+  else if(strstr(filename, ".jpg"))
+	  strcpy(filetype, "image/jpg");
   else
     strcpy(filetype, "text/plain");
 }
@@ -200,7 +245,7 @@ void print_requesthdrs(rio_t *rp)
 }
 
 //-----------------------------------------------------------------------------
-void parse_uri(char *uri, char *filename)
+int parse_uri(char *uri, char *filename, char *cgiargs)
 {
 /**** DO NOT MODIFY ****/
 /*
@@ -211,9 +256,29 @@ void parse_uri(char *uri, char *filename)
  *    - filename: local filepath (output)
  *
  */
-  strcpy(filename, ".");
-  strcat(filename, uri);
-  sscanf(uri, "http://%*[^/]/%s", filename);
+  char *ptr;
+  if(!strstr(uri, "cgi-bin"))
+  {
+    strcpy(cgiargs, "");
+    strcpy(filename, ".");
+    strcat(filename, uri);
+    if(uri[strlen(uri)-1] == '/')
+      strcat(filename, "home.html");
+    return 1;
+  }
+  else{
+    ptr = index(uri, '?');
+    if(ptr)
+    {
+      strcpy(cgiargs, ptr+1);
+      *ptr = '\0';
+    }
+    else
+      strcpy(cgiargs, "");
+    strcpy(filename, ".");
+    strcpy(filename, uri);
+    return 0;
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -251,3 +316,22 @@ void clienterror(int fd, char *cause, char *errnum,
   Rio_writen(fd, buf, strlen(buf));
   Rio_writen(fd, body, strlen(body));
 }
+
+void serve_dynamic(int fd, char *filename, char *cgiargs)
+{
+  char buf[MAXLINE], *emptylist[] = {NULL};
+  /* return first part of HTTP response */
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  Rio_writen(fd ,buf, strlen(buf));
+  sprintf(buf, "Server: Tiny Web Server\r\n");
+  Rio_writen(fd, buf, strlen(buf));
+
+  if(Fork() == 0)
+  {
+    setenv("QUERY_STRING", cgiargs, 1);
+    Dup2(fd, STDOUT_FILENO);
+    Execve(filename, emptylist, environ);
+  }
+  Wait(NULL);
+}
+
