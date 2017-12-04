@@ -81,12 +81,14 @@ void doit(int fd)
  *    - fd (int): file descriptor of the connection socket.
  */
   
-  char line1[MAXLINE], line2[MAXLINE], host[MAXLINE];
-  int serverfd, port;
+  char line1[MAXLINE], line2[MAXLINE];
+  int serverfd;
   // send to the http server
   char host_httpserv[MAXLINE];
   int port_httpserv;
   rio_t rio;
+  memset(line1, 0, strlen(line1));
+
 
   Rio_readinitb(&rio, fd);
 
@@ -101,47 +103,62 @@ void doit(int fd)
   // the request has ended
   
   char responseBuffer[MAXLINE], response[MAXLINE];
-  char contentBuffer[2<<20];
+  char contentBuffer[MAXLINE];
   int contentLength;
   rio_t serverResponse;
-
-  char method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+  memset(responseBuffer, 0, strlen(responseBuffer));
+  memset(response, 0, strlen(response));
+ 
+  char method[MAXLINE], uri[MAXLINE], version[MAXLINE];  
   sscanf(line1, "%s %s %s", method, uri, version);
-  sscanf(uri, "http://%*[^/]%s", contentBuffer);
-  sprintf(response, "%s %s %s", method, contentBuffer, version);
+  sscanf(uri, "http://%*[^/]%s", uri);	// new uri stores the path
+  sprintf(response, "%s %s %s", method, uri, version);
   strcat(response, "\r\n");
   strcat(response, "\r\n");
-  responseBuffer[0] = '\0';
 
   // send the content to the http server
   serverfd = Open_clientfd(host_httpserv, port_httpserv);
   Rio_readinitb(&serverResponse, serverfd);
   Rio_writen(serverfd, response, MAXLINE);
-
+  memset(response, 0, strlen(response));
   // Read the response header from the server and build the proxy's response
   // header by repeatedly adding the responseBuffer (server response)
-  while(strcmp(contentBuffer, "\r\n"))
+  while(strcmp(responseBuffer, "\r\n"))
   {
-    Rio_readlineb(&serverResponse, contentBuffer, MAXLINE);
-    strcat(responseBuffer, contentBuffer);
+    Rio_readlineb(&serverResponse, responseBuffer, MAXLINE);
+    //printf("%s\n", responseBuffer);
+    //fflush(stdout);
+    strcat(response, responseBuffer);
   }
 
-  char temp[32];
+  char temp[MAXLINE];
   // we must parse the Content-Length header from the server response in order
   // to know how much content to read from the server and write to the client
-  sscanf(responseBuffer, "%*[^-]%*s %s\r\n", temp);
+  sscanf(response, "%*[^-]%*s %s\r\n", temp);
   contentLength = atoi(temp);  
-//  printf("%s", responseBuffer);
   // Using the contentLength read from the server response header,
   // we must allocate and read that many bytes to our buffer
-
-  Rio_readnb(&serverResponse, contentBuffer, contentLength+1);
-  strcat(responseBuffer, contentBuffer);
-
+  if(contentLength > MAXLINE){
+    //char LcontentBuffer[contentLength];
+    char * LcontentBuffer = (char *) malloc(contentLength);
+    Rio_readnb(&serverResponse, LcontentBuffer, contentLength);
   // We now write the response heading and the content back to the client
-  Rio_writen(fd, responseBuffer, strlen(responseBuffer));
-//  printf("%s", responseBuffer);
+    Rio_writen(fd, response, strlen(response));
+    Rio_writen(fd, LcontentBuffer, contentLength);
+    free(LcontentBuffer);
+    //memset(LcontentBuffer, 0, strlen(LcontentBuffer));
+  }
+  else{
+    Rio_readnb(&serverResponse, contentBuffer, contentLength);
+    // We now write the response heading and the content back to the client
+    Rio_writen(fd, response, strlen(response));
+    Rio_writen(fd, contentBuffer, contentLength);
+
+  }
   Close(serverfd);
+  memset(response, 0, strlen(response));
+  memset(responseBuffer, 0, strlen(responseBuffer));
+  memset(contentBuffer, 0, strlen(contentBuffer));
   // Close the connection to the server
 }
 

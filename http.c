@@ -42,7 +42,7 @@ void doit(int fd);
 void print_requesthdrs(rio_t *rp);
 void parse_uri(char *uri, char *filename);
 void serve_static(int fd, char *filename, int filesize);
-void serve_dynamic(int fd, char *filename, char *cgiargs);
+//void serve_dynamic(int fd, char *filename, char *cgiargs);
 void get_filetype(char *filename, char *filetype);
 void clienterror(int fd, char *cause, char *errnum,
                  char *shortmsg, char *longmsg);
@@ -94,7 +94,7 @@ void doit(int fd)
   int is_static = 1;
   struct stat sbuf;
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-  char filename[MAXLINE], cgiargs[MAXLINE]; 
+  char filename[MAXLINE]; //, cgiargs[MAXLINE]; 
   
   // read and store the first line of the HTTP request in the corresponding
   // variables (format: method uri and version)
@@ -138,15 +138,15 @@ void doit(int fd)
       return ;
     }
     serve_static(fd, filename, sbuf.st_size);
-  }
+  }/*
   else{
     if(!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode))
     {
       clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't run the CGI program");
       return ;
     }
-    serve_dynamic(fd, filename, cgiargs);
-  }
+    serve_dynamic(fd, filename, cgiargs);} */
+  
 
   // be sure to call this only after you have read out all the information
   // you need from the request
@@ -309,11 +309,10 @@ void clienterror(int fd, char *cause, char *errnum,
   Rio_writen(fd, buf, strlen(buf));
   Rio_writen(fd, body, strlen(body));
 }
-
+/*
 void serve_dynamic(int fd, char *filename, char *cgiargs)
 {
   char buf[MAXLINE], *emptylist[] = {NULL};
-  /* return first part of HTTP response */
   sprintf(buf, "HTTP/1.0 200 OK\r\n");
   Rio_writen(fd ,buf, strlen(buf));
   sprintf(buf, "Server: Tiny Web Server\r\n");
@@ -327,4 +326,4 @@ void serve_dynamic(int fd, char *filename, char *cgiargs)
   }
   Wait(NULL);
 }
-
+*/
